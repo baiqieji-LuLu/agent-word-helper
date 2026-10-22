@@ -81,7 +81,7 @@ Step 2: Send the Test Command to your Agent
 
 Copy and paste the following prompt to your Agent:
 
-"Please read AGENT_GUIDE_WORD.md to understand the rules. Then, use word_helper.py to convert the examples/demo.md file into a Word document named demo_test.docx. After the conversion is successful, use the read command to verify the content and report the file path to me."
+"Please read AGENT_GUIDE_WORD.md to understand the rules. Then, use word_helper.py to convert the demo.md file into a Word document named demo_test.docx. After the conversion is successful, use the read command to verify the content and report the file path to me."
 
 Step 3: What to expect
 
