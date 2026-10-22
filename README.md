@@ -65,7 +65,7 @@ If you do not have Office installed, you can search for this file online or extr
 
 ## Built for AI Agents
 
-This repository includes a ready-to-use AGENT_GUIDE_WORD.md.
+This repository includes a ready-to-use AGENT_GUIDE.md.
 
 When you are prompting your LLM Agent (Claude, GPT, DeepSeek, etc.), simply inject this guide into the system prompt. It will strictly command the Agent to use this script instead of hallucinating win32com code, saving you hundreds of thousands of tokens and preventing endless debugging loops.
 
