@@ -161,6 +161,11 @@ def latex_to_omml(latex_str: str):
         )
     if etree is None:  #新增
         raise WordHelperError("缺少 lxml，无法转换数学公式。")
+    #兼容用户习惯：latex2mathml 不支持 aligned 环境，归一化为等价的 align
+    latex_str = (
+        latex_str.replace(r"\begin{aligned}", r"\begin{align}")
+        .replace(r"\end{aligned}", r"\end{align}")
+    )
     mathml_str = latex2mathml.converter.convert(latex_str)
     mathml_tree = etree.fromstring(mathml_str.encode("utf-8"))
     omml_tree = _get_transformer()(mathml_tree)
