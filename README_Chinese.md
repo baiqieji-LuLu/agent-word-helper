@@ -65,7 +65,7 @@
 
 ## 为 AI Agent 打造
 
-本仓库内置了一份开箱即用的 AGENT_GUIDE_WORD.md。
+本仓库内置了一份开箱即用的 AGENT_GUIDE.md。
 
 当你在给 LLM Agent（如 Claude、GPT、DeepSeek 等）写 Prompt 时，只需将这份指南注入到系统提示词（System Prompt）中。它会强制命令 Agent 使用本脚本，而不是去瞎编 win32com 代码，从而为你省下几十万 Token 的浪费，并避免无休止的调试死循环。
 
