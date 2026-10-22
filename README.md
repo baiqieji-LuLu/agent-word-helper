@@ -23,6 +23,13 @@ pip install python-docx latex2mathml lxml
 
 ###IMPORTANT###: Ensure MML2OMML.XSL (included in this repo) is placed in the same directory as word_helper.py. This stylesheet is required for converting MathML to OMML.
 
+Prerequisite: MML2OMML.XSL
+To convert MathML to OMML, this tool requires Microsoft's official MML2OMML.XSL stylesheet. Due to copyright restrictions, this file is not included in this repository.
+How to get it:
+If you have Microsoft Office installed on Windows, search for MML2OMML.XSL in your Office installation directory (usually located at C:\Program Files\Microsoft Office\root\Office16\).
+Copy the file and place it in the same directory as word_helper.py.
+If you do not have Office installed, you can search for this file online or extract it from an Office ISO.
+
 Quick Start
 1. Create a document from a string (with formulas):
 
