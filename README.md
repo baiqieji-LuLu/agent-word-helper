@@ -27,9 +27,11 @@ Quick Start
 1. Create a document from a string (with formulas):
 
 python word_helper.py create --text "Energy conservation: \$E=mc^2\$" -o output.docx --format markdown
+
 2. Create a document from a Markdown file:
 
 python word_helper.py create notes.md -o notes.docx --format markdown
+
 3. Read text and tables from a document:
 
 python word_helper.py read output.docx
