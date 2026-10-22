@@ -218,3 +218,8 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Custom ignores for word_helper
+.pylibs_math/
+*.docx
+temp*
