@@ -2,17 +2,17 @@
 # -*- coding: utf-8 -*-
 """word_helper.py
 
-通用 Word 文档小工具：
-1. 把文本文件或字符串排版成 DOCX；
-2. 读取 DOCX 中的全部正文文本（含表格，按阅读顺序）；
-3. 支持 $...$ 行内公式与 $$...$$ 独立公式（LaTeX -> OMML）。（新增）
+General-purpose Word tool:
+1. Typeset a text file or string into a DOCX;
+2. Read all body text from a DOCX (including tables, in reading order);
+3. Supports $...$ inline and $$...$$ display formulas (LaTeX -> OMML).
 
-完全基于 python-docx（>= 1.2.0）与 OOXML 操作，不调用 Microsoft Word，
-也不使用任何 COM 自动化或 Office 自动化接口。
+Built entirely on python-docx (>= 1.2.0) and OOXML; does not invoke Microsoft Word,
+nor any COM or Office automation interfaces.
 
-常用命令：
-    python word_helper.py create --text "你好，世界" -o hello.docx
-    python word_helper.py create --input notes.md -o notes.docx --title "笔记"
+Common commands:
+    python word_helper.py create --text "Hello, world" -o hello.docx
+    python word_helper.py create --input notes.md -o notes.docx --title "Notes"
     python word_helper.py read report.docx
     python word_helper.py read report.docx --all --json
 """
@@ -42,7 +42,7 @@ from docx.shared import Cm, Pt, RGBColor
 from docx.table import Table
 from docx.text.paragraph import Paragraph
 
-#新增：LaTeX -> MathML -> OMML 转换依赖；优先使用工作区内的 .pylibs_math
+# LaTeX -> MathML -> OMML conversion dependencies; prefer the workspace .pylibs_math directory.
 try:
     import latex2mathml.converter
     from lxml import etree
@@ -58,16 +58,16 @@ except ModuleNotFoundError:
         etree = None
 
 # ---------------------------------------------------------------------------
-# 可调整的排版常量
+# Adjustable layout constants
 # ---------------------------------------------------------------------------
 
-BODY_SIZE_PT = 12.0          # 正文小四
-BODY_LINE_SPACING = 1.5      # 1.5 倍行距
-BODY_CJK_FONT = "宋体"
+BODY_SIZE_PT = 12.0          # Body text size: 12 pt
+BODY_LINE_SPACING = 1.5      # 1.5 line spacing
+BODY_CJK_FONT = "SimSun"
 BODY_LATIN_FONT = "Calibri"
-HEADING_CJK_FONT = "微软雅黑"
+HEADING_CJK_FONT = "Microsoft YaHei"
 HEADING_LATIN_FONT = "Arial"
-CODE_CJK_FONT = "等线"
+CODE_CJK_FONT = "DengXian"
 CODE_LATIN_FONT = "Consolas"
 
 TITLE_COLOR = RGBColor(0x1F, 0x38, 0x64)
@@ -86,7 +86,7 @@ TABLE_STRIPE_FILL = "F2F6FA"
 INLINE_CODE_FILL = "F2F2F2"
 CODE_BLOCK_FILL = "F6F8FA"
 
-# 用于把 pBdr / shd 等元素插到 OOXML 规定的位置，避免生成不规范文档。
+# Insert pBdr / shd elements at OOXML-required positions to avoid malformed documents.
 _PBDR_SUCCESSORS = (
     "w:shd", "w:tabs", "w:suppressAutoHyphens", "w:kinsoku", "w:wordWrap",
     "w:overflowPunct", "w:topLinePunct", "w:autoSpaceDE", "w:autoSpaceDN",
@@ -132,36 +132,36 @@ _TRHEADER_SUCCESSORS = (
 
 
 class WordHelperError(Exception):
-    """可以直接展示给用户的错误。"""
+    """An error whose message can be shown directly to the user."""
 
 
-#新增：全局缓存 XSLT 转换器，避免每次解析 MML2OMML.XSL
+# Cache the XSLT transformer globally so MML2OMML.XSL is parsed only once.
 _XSLT_TRANSFORMER = None
 
 
 def _get_transformer():
-    """新增：惰性加载并缓存 MathML -> OMML 的 XSLT 转换器。"""
+    """Lazily load and cache the MathML -> OMML XSLT transformer."""
     global _XSLT_TRANSFORMER
     if _XSLT_TRANSFORMER is None:
         if etree is None:
-            raise WordHelperError("缺少 lxml，无法转换数学公式。")
+            raise WordHelperError("Missing dependency: lxml; cannot convert math formulas.")
         xsl_path = Path(__file__).resolve().with_name("MML2OMML.XSL")
         if not xsl_path.is_file():
-            raise WordHelperError(f"缺少公式转换样式表：{xsl_path}")
+            raise WordHelperError(f"Missing formula stylesheet: {xsl_path}")
         _XSLT_TRANSFORMER = etree.XSLT(etree.parse(str(xsl_path)))
     return _XSLT_TRANSFORMER
 
 
 def latex_to_omml(latex_str: str):
-    """新增：LaTeX -> MathML -> OMML，返回 m:oMath 元素。"""
+    """Convert LaTeX -> MathML -> OMML and return an m:oMath element."""
     if latex2mathml is None:
         raise WordHelperError(
-            "缺少 latex2mathml，无法转换数学公式；"
-            "请安装该依赖，或放入工作区 .pylibs_math 目录。"
+            "Missing dependency: latex2mathml; cannot convert math formulas. "
+            "Install it or place it in the workspace .pylibs_math directory."
         )
-    if etree is None:  #新增
-        raise WordHelperError("缺少 lxml，无法转换数学公式。")
-    #兼容用户习惯：latex2mathml 不支持 aligned 环境，归一化为等价的 align
+    if etree is None:
+        raise WordHelperError("Missing dependency: lxml; cannot convert math formulas.")
+    # Compatibility: latex2mathml does not support the aligned environment, so normalize it to the equivalent align.
     latex_str = (
         latex_str.replace(r"\begin{aligned}", r"\begin{align}")
         .replace(r"\end{aligned}", r"\end{align}")
@@ -171,23 +171,23 @@ def latex_to_omml(latex_str: str):
     omml_tree = _get_transformer()(mathml_tree)
     root = omml_tree.getroot()
     if root.tag != qn("m:oMath"):
-        raise WordHelperError(f"公式转换结果异常：{root.tag}")
+        raise WordHelperError(f"Unexpected formula conversion result: {root.tag}")
     return root
 
 
-def _math_error_detail(exc: Exception) -> str:  #新增
-    """#新增：部分转换异常没有文本消息，回退到异常类型名。"""
+def _math_error_detail(exc: Exception) -> str:
+    """Some conversion errors have no message; fall back to the exception type name."""
     return str(exc) or type(exc).__name__
 
 
 # ---------------------------------------------------------------------------
-# Markdown / 纯文本解析
+# Markdown / plain-text parsing
 # ---------------------------------------------------------------------------
 
 
 @dataclass
 class Block:
-    """排版前的中间结构。"""
+    """Intermediate structure before layout."""
 
     kind: str
     text: str = ""
@@ -217,7 +217,7 @@ INLINE_RE = re.compile(
 INLINE_HINT_RE = re.compile(
     r"\*\*[^*\n]+\*\*|`[^`\n]+`|\[[^\]\n]+\]\([^)\n]+\)"
 )
-#新增：行内公式 $...$、单行独立公式 $$...$$、独立公式围栏 $$
+# Inline math $...$, single-line display math $$...$$, and display-math fences $$.
 INLINE_MATH_RE = re.compile(r"(?<!\$)\$(?!\$)(?P<math>[^$\n]+?)\$(?!\$)")
 DISPLAY_MATH_RE = re.compile(r"^\s*\$\$(?P<math>.+?)\$\$\s*$")
 DISPLAY_MATH_FENCE_RE = re.compile(r"^\s*\$\$\s*$")
@@ -230,16 +230,16 @@ def _normalize_newlines(text: str) -> str:
 def _is_cjk_or_fullwidth(ch: str) -> bool:
     code = ord(ch)
     return (
-        0x3000 <= code <= 0x303F      # CJK 标点
-        or 0x3400 <= code <= 0x4DBF   # 扩展 A
-        or 0x4E00 <= code <= 0x9FFF   # 基本区
-        or 0xF900 <= code <= 0xFAFF   # 兼容区
-        or 0xFF00 <= code <= 0xFFEF   # 全角字符
+        0x3000 <= code <= 0x303F      # CJK punctuation
+        or 0x3400 <= code <= 0x4DBF   # Extension A
+        or 0x4E00 <= code <= 0x9FFF   # Basic block
+        or 0xF900 <= code <= 0xFAFF   # Compatibility block
+        or 0xFF00 <= code <= 0xFFEF   # Full-width characters
     )
 
 
 def _smart_join(lines: Sequence[str]) -> str:
-    """合并 Markdown 软换行：中文之间不加空格，其余情况加一个空格。"""
+    """Merge Markdown soft line breaks: no space between CJK characters, otherwise one space."""
     pieces: list[str] = []
     for raw in lines:
         line = raw.strip()
@@ -264,7 +264,7 @@ def _starts_markdown_block(lines: Sequence[str], index: int) -> bool:
         return True
     if HR_RE.match(line) or QUOTE_RE.match(line):
         return True
-    if DISPLAY_MATH_RE.match(line) or DISPLAY_MATH_FENCE_RE.match(line):  #新增
+    if DISPLAY_MATH_RE.match(line) or DISPLAY_MATH_FENCE_RE.match(line):
         return True
     if UL_RE.match(line) or OL_RE.match(line):
         return True
@@ -274,7 +274,7 @@ def _starts_markdown_block(lines: Sequence[str], index: int) -> bool:
 
 
 def looks_like_markdown(text: str) -> bool:
-    """启发式判断文本是否像 Markdown。"""
+    """Heuristically determine whether the text looks like Markdown."""
     for line in text.splitlines():
         if (
             HEADING_RE.match(line)
@@ -290,18 +290,18 @@ def looks_like_markdown(text: str) -> bool:
 
 
 def resolve_format(requested: str, source_path: Path | None, text: str) -> str:
-    """把 auto 解析为 markdown 或 plain。"""
+    """Resolve ``auto`` to ``markdown`` or ``plain``."""
     if requested in {"markdown", "plain"}:
         return requested
     if requested != "auto":
-        raise WordHelperError(f"未知格式：{requested}")
+        raise WordHelperError(f"Unknown format: {requested}")
     if source_path and source_path.suffix.lower() in {".md", ".markdown", ".mdown"}:
         return "markdown"
     return "markdown" if looks_like_markdown(text) else "plain"
 
 
 def parse_plain(text: str) -> list[Block]:
-    #新增：纯文本模式下同样识别 $$...$$ 独立公式
+    # Plain-text mode also recognizes $$...$$ display math.
     lines = _normalize_newlines(text).split("\n")
     blocks: list[Block] = []
     index = 0
@@ -398,7 +398,7 @@ def parse_markdown(text: str) -> list[Block]:
             index += 1
             continue
 
-        #新增：单行独立公式 $$...$$
+        # Single-line display math $$...$$.
         display_match = DISPLAY_MATH_RE.match(line)
         if display_match:
             latex = display_match.group("math").strip()
@@ -407,7 +407,7 @@ def parse_markdown(text: str) -> list[Block]:
             index += 1
             continue
 
-        #新增：围栏式独立公式（单独一行的 $$ 包围多行 LaTeX）
+        # Fenced display math (a line containing only $$ wraps multi-line LaTeX).
         if DISPLAY_MATH_FENCE_RE.match(line):
             index += 1
             math_lines: list[str] = []
@@ -535,7 +535,7 @@ def parse_text(text: str, fmt: str) -> list[Block]:
 
 
 # ---------------------------------------------------------------------------
-# OOXML 小工具
+# OOXML helpers
 # ---------------------------------------------------------------------------
 
 
@@ -739,7 +739,7 @@ def _add_field(
 
 
 # ---------------------------------------------------------------------------
-# DOCX 生成
+# DOCX generation
 # ---------------------------------------------------------------------------
 
 
@@ -780,8 +780,8 @@ def _configure_styles(doc) -> None:
     title.paragraph_format.space_before = Pt(0)
     title.paragraph_format.space_after = Pt(6)
     title.paragraph_format.line_spacing = 1.15
-    # 默认模板的 Title 样式自带一条下边框；标题块统一由 _add_title_block
-    # 在副标题之后画线，因此这里移除模板边框，避免出现两条横线。
+    # The default template Title style has a bottom border; the title block
+    # draws its line after the subtitle, so remove the template border here to avoid a double line.
     title_ppr = title.element.get_or_add_pPr()
     title_border = title_ppr.find(qn("w:pBdr"))
     if title_border is not None:
@@ -899,7 +899,7 @@ def _setup_header_footer(doc, display_title: str) -> None:
     header_paragraph.alignment = WD_ALIGN_PARAGRAPH.RIGHT
     header_paragraph.paragraph_format.space_before = Pt(0)
     header_paragraph.paragraph_format.space_after = Pt(2)
-    _add_header_text(header_paragraph, _shorten(display_title, 70))  #新增
+    _add_header_text(header_paragraph, _shorten(display_title, 70))
     _set_pbdr(
         header_paragraph._p.get_or_add_pPr(),
         edge="bottom",
@@ -945,8 +945,8 @@ def _shorten(text: str, limit: int) -> str:
     return compact[: limit - 1] + "…"
 
 
-def _set_omml_size(omml_root, size_pt: float) -> None:  #新增
-    """#新增：给 OMML 内的 run 指定字号（页眉等小字号场景）。"""
+def _set_omml_size(omml_root, size_pt: float) -> None:
+    """Set the font size of runs inside OMML (e.g., for small header text)."""
     value = str(int(round(size_pt * 2)))
     for run in omml_root.iter(qn("m:r")):
         r_pr = run.find(qn("w:rPr"))
@@ -962,8 +962,8 @@ def _set_omml_size(omml_root, size_pt: float) -> None:  #新增
             element.set(qn("w:val"), value)
 
 
-def _add_header_text(paragraph: Paragraph, text: str) -> None:  #新增
-    """#新增：页眉文字，支持其中的 $...$ 行内公式。"""
+def _add_header_text(paragraph: Paragraph, text: str) -> None:
+    """Header text, supporting inline $...$ math."""
     position = 0
     for match in INLINE_MATH_RE.finditer(text):
         if match.start() > position:
@@ -981,7 +981,7 @@ def _add_header_text(paragraph: Paragraph, text: str) -> None:  #新增
             raise
         except Exception as exc:
             raise WordHelperError(
-                f"公式转换失败：{match.group('math')}（{_math_error_detail(exc)}）"
+                f"Formula conversion failed: {match.group('math')} ({_math_error_detail(exc)})"
             ) from exc
         _set_omml_size(omml, 9)
         paragraph._p.append(omml)
@@ -1073,7 +1073,7 @@ def _add_inline(
     latin_font: str = BODY_LATIN_FONT,
     cjk_font: str = BODY_CJK_FONT,
 ) -> None:
-    """新增：先切分 $...$ 数学公式，其余内容交给 Markdown 行内渲染。"""
+    """Split $...$ math first, then render the remaining text as inline Markdown."""
     position = 0
     for match in INLINE_MATH_RE.finditer(text):
         if match.start() > position:
@@ -1093,7 +1093,7 @@ def _add_inline(
             raise
         except Exception as exc:
             raise WordHelperError(
-                f"公式转换失败：{match.group('math')}（{_math_error_detail(exc)}）"
+                f"Formula conversion failed: {match.group('math')} ({_math_error_detail(exc)})"
             ) from exc
         position = match.end()
 
@@ -1110,7 +1110,7 @@ def _add_inline(
         )
 
 
-def _add_inline_markdown(  #新增：原 Markdown 行内渲染逻辑
+def _add_inline_markdown(
     paragraph: Paragraph,
     text: str,
     *,
@@ -1206,8 +1206,8 @@ def _add_inline_markdown(  #新增：原 Markdown 行内渲染逻辑
         )
 
 
-def _add_text_with_math(paragraph: Paragraph, text: str) -> None:  #新增
-    """新增：纯文本模式下的行内公式渲染，不解释 Markdown。"""
+def _add_text_with_math(paragraph: Paragraph, text: str) -> None:
+    """Render inline math in plain-text mode without interpreting Markdown."""
     position = 0
     for match in INLINE_MATH_RE.finditer(text):
         if match.start() > position:
@@ -1218,7 +1218,7 @@ def _add_text_with_math(paragraph: Paragraph, text: str) -> None:  #新增
             raise
         except Exception as exc:
             raise WordHelperError(
-                f"公式转换失败：{match.group('math')}（{_math_error_detail(exc)}）"
+                f"Formula conversion failed: {match.group('math')} ({_math_error_detail(exc)})"
             ) from exc
         position = match.end()
 
@@ -1288,7 +1288,7 @@ def _add_body_paragraph(doc, text: str, *, use_inline: bool = True) -> None:
     if use_inline:
         _add_inline(paragraph, text)
     else:
-        _add_text_with_math(paragraph, text)  #新增
+        _add_text_with_math(paragraph, text)
 
 
 def _add_bullet(doc, text: str, level: int) -> None:
@@ -1403,8 +1403,8 @@ def _add_table(doc, block: Block) -> None:
     spacer.paragraph_format.line_spacing = Pt(2)
 
 
-def _add_display_math(doc, latex: str) -> None:  #新增
-    """新增：把 $$...$$ 渲染为居中的独立 Word 公式。"""
+def _add_display_math(doc, latex: str) -> None:
+    """Render $$...$$ as a centered display Word equation."""
     paragraph = doc.add_paragraph(style="Normal")
     paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
     paragraph.paragraph_format.first_line_indent = Pt(0)
@@ -1417,7 +1417,7 @@ def _add_display_math(doc, latex: str) -> None:  #新增
         raise
     except Exception as exc:
         raise WordHelperError(
-            f"公式转换失败：{latex}（{_math_error_detail(exc)}）"
+            f"Formula conversion failed: {latex} ({_math_error_detail(exc)})"
         ) from exc
     math_paragraph = OxmlElement("m:oMathPara")
     math_paragraph.append(omml)
@@ -1442,7 +1442,7 @@ def _add_blocks(
             _add_code_block(doc, block.text)
         elif block.kind == "table":
             _add_table(doc, block)
-        elif block.kind == "math":  #新增
+        elif block.kind == "math":
             _add_display_math(doc, block.text)
         elif block.kind == "hr":
             _add_horizontal_rule(doc)
@@ -1453,8 +1453,8 @@ def _set_core_properties(doc, title: str, author: str | None) -> None:
     properties.title = title
     properties.author = author or ""
     properties.last_modified_by = "word_helper.py"
-    properties.subject = "由 word_helper.py 生成的文档"
-    properties.comments = "使用 python-docx 生成，未使用 COM 接口。"
+    properties.subject = "Document generated by word_helper.py"
+    properties.comments = "Generated with python-docx; no COM interfaces used."
     properties.language = "zh-CN"
 
 
@@ -1469,7 +1469,7 @@ def _build_document(
 ):
     blocks = parse_text(text, fmt)
     if not blocks:
-        raise WordHelperError("输入中没有可写入的非空文本。")
+        raise WordHelperError("No non-empty text to write.")
 
     explicit_title = title.strip() if title else ""
     first_heading = next(
@@ -1480,7 +1480,7 @@ def _build_document(
         ),
         "",
     )
-    fallback_title = source_path.stem if source_path else "未命名文档"
+    fallback_title = source_path.stem if source_path else "Untitled Document"
     display_title = explicit_title or first_heading or fallback_title
 
     doc = Document()
@@ -1514,11 +1514,11 @@ def _save_docx(doc, output: Path) -> None:
     temporary_path = Path(temporary_name)
     try:
         doc.save(str(temporary_path))
-        # 重新打开一次，确认 ZIP/关系/XML 能被 python-docx 正常读取。
+        # Reopen once to confirm the ZIP, relationships, and XML can be read by python-docx.
         Document(str(temporary_path))
         os.replace(str(temporary_path), str(output))
     except Exception as exc:
-        raise WordHelperError(f"保存 DOCX 失败：{exc}") from exc
+        raise WordHelperError(f"Failed to save DOCX: {exc}") from exc
     finally:
         if temporary_path.exists():
             try:
@@ -1538,20 +1538,20 @@ def create_docx(
     source_path: str | Path | None = None,
     overwrite: bool = True,
 ) -> Path:
-    """把字符串排版成 DOCX，返回输出文件路径。"""
+    """Typeset a string into DOCX and return the output path."""
     if not isinstance(text, str):
-        raise WordHelperError("text 必须是字符串。")
+        raise WordHelperError("text must be a string.")
     normalized = _normalize_newlines(text)
     if not normalized.strip():
-        raise WordHelperError("输入文本为空。")
+        raise WordHelperError("Input text is empty.")
 
     output_path = Path(output).expanduser().resolve()
     if output_path.is_dir():
-        raise WordHelperError(f"输出路径是一个目录：{output_path}")
+        raise WordHelperError(f"Output path is a directory: {output_path}")
     if output_path.suffix.lower() != ".docx":
-        raise WordHelperError("输出文件必须使用 .docx 扩展名。")
+        raise WordHelperError("Output file must have a .docx extension.")
     if output_path.exists() and not overwrite:
-        raise WordHelperError(f"输出文件已存在：{output_path}")
+        raise WordHelperError(f"Output file already exists: {output_path}")
 
     source = Path(source_path).expanduser().resolve() if source_path else None
     resolved_format = resolve_format(fmt, source, normalized)
@@ -1568,12 +1568,12 @@ def create_docx(
 
 
 # ---------------------------------------------------------------------------
-# DOCX 文本读取
+# DOCX text extraction
 # ---------------------------------------------------------------------------
 
 
 def _paragraph_text(paragraph_element) -> str:
-    """按文档顺序提取段落文本，包含超链接、域结果和文本框。"""
+    """Extract paragraph text in document order, including hyperlinks, field results, and text boxes."""
     parts: list[str] = []
 
     def walk(element) -> None:
@@ -1665,24 +1665,24 @@ def _collect_peripheral(doc, kind: str) -> list[dict]:
     odd_even = bool(doc.settings.odd_and_even_pages_header_footer)
 
     for section_index, section in enumerate(doc.sections, start=1):
-        suffix = f"（第 {section_index} 节）" if multiple_sections else ""
+        suffix = f" (section {section_index})" if multiple_sections else ""
         if kind == "header":
             candidates = [
-                (f"页眉{suffix}", section.header),
-                (f"首页页眉{suffix}", section.first_page_header),
-                (f"偶数页页眉{suffix}", section.even_page_header),
+                (f"Header{suffix}", section.header),
+                (f"First-page header{suffix}", section.first_page_header),
+                (f"Even-page header{suffix}", section.even_page_header),
             ]
         else:
             candidates = [
-                (f"页脚{suffix}", section.footer),
-                (f"首页页脚{suffix}", section.first_page_footer),
-                (f"偶数页页脚{suffix}", section.even_page_footer),
+                (f"Footer{suffix}", section.footer),
+                (f"First-page footer{suffix}", section.first_page_footer),
+                (f"Even-page footer{suffix}", section.even_page_footer),
             ]
 
         for label, part in candidates:
-            if label.startswith("首页") and not section.different_first_page_header_footer:
+            if label.startswith("First-page") and not section.different_first_page_header_footer:
                 continue
-            if label.startswith("偶数页") and not odd_even:
+            if label.startswith("Even-page") and not odd_even:
                 continue
             blocks = _container_blocks(part)
             text = _render_blocks(blocks)
@@ -1703,7 +1703,7 @@ def _collect_peripheral(doc, kind: str) -> list[dict]:
 
 
 def _collect_notes(docx_path: Path, part_name: str, label: str) -> list[dict]:
-    """读取 footnotes.xml / endnotes.xml 中的脚注、尾注文本。"""
+    """Read footnote and endnote text from footnotes.xml / endnotes.xml."""
     try:
         with zipfile.ZipFile(docx_path) as package:
             try:
@@ -1746,19 +1746,19 @@ def extract_docx(
     *,
     include_all_parts: bool = False,
 ) -> dict:
-    """读取 DOCX，返回正文、表格及可选页眉页脚、脚注尾注。
+    """Read a DOCX and return body, tables, and optionally headers, footers, footnotes, and endnotes.
 
-    默认只读取正文与表格，二者按文档阅读顺序保存在 ``body`` 中。
+    By default only the body and tables are read, in document order, and stored in ``body``.
     """
     docx_path = Path(path).expanduser().resolve()
     if not docx_path.is_file():
-        raise WordHelperError(f"文件不存在：{docx_path}")
+        raise WordHelperError(f"File not found: {docx_path}")
     if docx_path.suffix.lower() != ".docx":
-        raise WordHelperError("只能读取 .docx 文件。")
+        raise WordHelperError("Only .docx files can be read.")
     try:
         doc = Document(str(docx_path))
     except Exception as exc:
-        raise WordHelperError(f"无法打开 DOCX：{exc}") from exc
+        raise WordHelperError(f"Unable to open DOCX: {exc}") from exc
 
     body = _container_blocks(doc)
     body_text = _render_blocks(body)
@@ -1772,8 +1772,8 @@ def extract_docx(
     if include_all_parts:
         headers = _collect_peripheral(doc, "header")
         footers = _collect_peripheral(doc, "footer")
-        footnotes = _collect_notes(docx_path, "word/footnotes.xml", "脚注")
-        endnotes = _collect_notes(docx_path, "word/endnotes.xml", "尾注")
+        footnotes = _collect_notes(docx_path, "word/footnotes.xml", "Footnote")
+        endnotes = _collect_notes(docx_path, "word/endnotes.xml", "Endnote")
         result["headers"] = headers
         result["footers"] = footers
         result["footnotes"] = footnotes
@@ -1795,14 +1795,14 @@ def read_docx_text(
     *,
     include_all_parts: bool = False,
 ) -> str:
-    """读取 DOCX 的文本内容。默认只取正文与表格。"""
+    """Read the text content of a DOCX. Only the body and tables are read by default."""
     return extract_docx(
         path, include_all_parts=include_all_parts
     )["text"]
 
 
 # ---------------------------------------------------------------------------
-# 输入 / CLI
+# Input / CLI
 # ---------------------------------------------------------------------------
 
 
@@ -1810,7 +1810,7 @@ def _read_text_file(path: Path, encoding: str | None) -> str:
     try:
         data = path.read_bytes()
     except OSError as exc:
-        raise WordHelperError(f"无法读取文本文件：{exc}") from exc
+        raise WordHelperError(f"Unable to read text file: {exc}") from exc
 
     candidates: list[str]
     if encoding:
@@ -1831,34 +1831,34 @@ def _read_text_file(path: Path, encoding: str | None) -> str:
         except UnicodeDecodeError as exc:
             last_error = exc
     raise WordHelperError(
-        "无法解码文本文件，请用 --encoding 指定编码（例如 utf-8 或 gbk）。"
-        + (f" 最后一次错误：{last_error}" if last_error else "")
+        "Unable to decode text file; specify an encoding with --encoding (e.g. utf-8 or gbk)."
+        + (f" Last error: {last_error}" if last_error else "")
     )
 
 
 def _read_input(args) -> tuple[str, Path | None]:
     if args.source and args.input_file:
-        raise WordHelperError("位置参数和 --input 只能二选一。")
+        raise WordHelperError("Positional argument and --input are mutually exclusive.")
     source_value = args.source or args.input_file
 
     if args.text is not None:
         if source_value:
-            raise WordHelperError("--text 与文本文件输入不能同时使用。")
+            raise WordHelperError("--text cannot be combined with file input.")
         return _normalize_newlines(args.text), None
 
     if source_value is None or source_value == "-":
         if sys.stdin.isatty():
             raise WordHelperError(
-                "请提供 --text、文本文件，或通过管道传入标准输入。"
+                "Provide --text, a text file, or pipe input via standard input."
             )
         return _normalize_newlines(sys.stdin.read()), None
 
     source_path = Path(source_value).expanduser().resolve()
     if not source_path.is_file():
-        raise WordHelperError(f"输入文件不存在：{source_path}")
+        raise WordHelperError(f"Input file not found: {source_path}")
     if source_path.suffix.lower() == ".docx":
         raise WordHelperError(
-            "create 的输入应为文本文件；读取 DOCX 请使用 read 子命令。"
+            "create expects a text file; use the read subcommand to read DOCX files."
         )
     return _read_text_file(source_path, args.encoding), source_path
 
@@ -1872,7 +1872,7 @@ def _default_output(source_path: Path | None) -> Path:
 def cmd_create(args) -> int:
     text, source_path = _read_input(args)
     if not text.strip():
-        raise WordHelperError("输入文本为空。")
+        raise WordHelperError("Input text is empty.")
 
     resolved_format = resolve_format(args.format, source_path, text)
     output = (
@@ -1881,11 +1881,11 @@ def cmd_create(args) -> int:
         else _default_output(source_path)
     )
     if output.is_dir():
-        raise WordHelperError(f"输出路径是一个目录：{output}")
+        raise WordHelperError(f"Output path is a directory: {output}")
     if not output.suffix:
         output = output.with_suffix(".docx")
     if output.suffix.lower() != ".docx":
-        raise WordHelperError("输出文件必须使用 .docx 扩展名。")
+        raise WordHelperError("Output file must have a .docx extension.")
     output = output.resolve()
     existed = output.exists()
 
@@ -1898,10 +1898,10 @@ def cmd_create(args) -> int:
         fmt=resolved_format,
         source_path=source_path,
     )
-    action = "已覆盖" if existed else "已生成"
-    format_label = "Markdown" if resolved_format == "markdown" else "纯文本"
-    print(f"{action}：{output}")
-    print(f"排版格式：{format_label}")
+    action = "Overwritten" if existed else "Generated"
+    format_label = "Markdown" if resolved_format == "markdown" else "Plain text"
+    print(f"{action}: {output}")
+    print(f"Format: {format_label}")
     return 0
 
 
@@ -1921,12 +1921,12 @@ def cmd_read(args) -> int:
     if args.output:
         output = Path(args.output).expanduser().resolve()
         if output == path:
-            raise WordHelperError("输出文件不能与输入的 DOCX 是同一个文件。")
+            raise WordHelperError("Output file cannot be the same as the input DOCX.")
         if output.is_dir():
-            raise WordHelperError(f"输出路径是一个目录：{output}")
+            raise WordHelperError(f"Output path is a directory: {output}")
         output.parent.mkdir(parents=True, exist_ok=True)
         output.write_text(content, encoding="utf-8")
-        print(f"已写入：{output}", file=sys.stderr)
+        print(f"Written: {output}", file=sys.stderr)
     else:
         sys.stdout.write(content)
     return 0
@@ -1936,15 +1936,15 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="word_helper.py",
         description=(
-            "通用 Word 小工具：由文本/字符串生成排版好的 DOCX，"
-            "或读取 DOCX 的全部正文文本。"
+            "General-purpose Word tool: typeset DOCX from text or strings, "
+            "or read all body text from a DOCX."
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=(
-            "示例：\n"
-            "  python word_helper.py create --text \"你好，世界\" -o hello.docx\n"
-            "  python word_helper.py create --text '质能方程 $E=mc^2$' -o math.docx\n"  #新增
-            "  python word_helper.py create --input notes.md -o notes.docx --title \"项目笔记\"\n"
+            "Examples:\n"
+            "  python word_helper.py create --text \"Hello, world\" -o hello.docx\n"
+            "  python word_helper.py create --text 'Mass-energy equivalence $E=mc^2$' -o math.docx\n"
+            "  python word_helper.py create --input notes.md -o notes.docx --title \"Project Notes\"\n"
             "  python word_helper.py read report.docx\n"
             "  python word_helper.py read report.docx --all --json\n"
         ),
@@ -1955,65 +1955,65 @@ def build_parser() -> argparse.ArgumentParser:
 
     create_parser = subparsers.add_parser(
         "create",
-        help="由文本文件或字符串生成 DOCX",
-        description="把字符串、文本文件或标准输入排版成 DOCX（支持 $...$ / $$...$$ 数学公式）。",  #新增
+        help="Generate a DOCX from a text file or a string",
+        description="Typeset a string, text file, or standard input into DOCX (supports $...$ / $$...$$ math).",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     create_parser.add_argument(
         "source",
         nargs="?",
-        help="输入文本文件；也可用 --input 指定，或传入 - 读取标准输入",
+        help="Input text file; alternatively use --input, or pass - to read standard input",
     )
     create_parser.add_argument(
-        "-i", "--input", dest="input_file", help="输入文本文件路径"
+        "-i", "--input", dest="input_file", help="Path to an input text file"
     )
     create_parser.add_argument(
-        "-t", "--text", help="直接传入字符串；与文本文件输入互斥"
+        "-t", "--text", help="String to typeset directly; mutually exclusive with file input"
     )
     create_parser.add_argument(
         "-o",
         "--output",
-        help="输出 .docx 路径；省略时使用输入文件同名 .docx，或 output.docx",
+        help="Output .docx path; defaults to the input file name with .docx, or output.docx",
     )
-    create_parser.add_argument("--title", help="文档标题（会显示在正文顶部）")
-    create_parser.add_argument("--author", help="作者，显示在标题下方")
+    create_parser.add_argument("--title", help="Document title (shown at the top of the body)")
+    create_parser.add_argument("--author", help="Author, shown below the title")
     create_parser.add_argument(
-        "--date", dest="date_text", help="日期文本，例如 2026年10月21日"
+        "--date", dest="date_text", help="Date text, e.g. 2026-10-21"
     )
     create_parser.add_argument(
         "--format",
         choices=("auto", "plain", "markdown"),
         default="auto",
-        help="输入格式；默认 auto（.md 文件按 Markdown，其余按内容判断）",
+        help="Input format; default auto (.md files as Markdown, others detected from content)",
     )
     create_parser.add_argument(
         "--encoding",
-        help="文本文件编码；省略时自动尝试 UTF-8 / UTF-16 BOM / GB18030",
+        help="Text file encoding; by default tries UTF-8 / UTF-16 BOM / GB18030",
     )
     create_parser.set_defaults(func=cmd_create)
 
     read_parser = subparsers.add_parser(
         "read",
-        help="读取 DOCX 的文本内容",
+        help="Read the text content of a DOCX",
         description=(
-            "按阅读顺序读取 DOCX 正文和表格；可选读取页眉页脚、脚注尾注。"
+            "Read DOCX body and tables in reading order; optionally read headers, footers, footnotes, and endnotes."
         ),
     )
-    read_parser.add_argument("input", help="要读取的 .docx 文件")
+    read_parser.add_argument("input", help="The .docx file to read")
     read_parser.add_argument(
         "--all",
         action="store_true",
-        help="同时读取页眉、页脚、首页/偶数页页眉页脚、脚注和尾注",
+        help="Also read headers, footers, first-page/even-page headers and footers, footnotes, and endnotes",
     )
     read_parser.add_argument(
         "--json",
         action="store_true",
-        help="输出结构化 JSON，而不是纯文本",
+        help="Output structured JSON instead of plain text",
     )
     read_parser.add_argument(
         "-o",
         "--output",
-        help="把结果写入指定的 UTF-8 文本文件，而不是打印到终端",
+        help="Write the result to a UTF-8 text file instead of printing to the terminal",
     )
     read_parser.set_defaults(func=cmd_read)
 
@@ -2021,9 +2021,9 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def _configure_console_encoding() -> None:
-    """在 UTF-8 代码页的控制台中，修正 Python 仍按 GBK 输出导致的乱码。
+    """Fix garbled output when the console uses the UTF-8 code page but Python still writes GBK.
 
-    普通 GBK 控制台保持原样；不涉及 COM，也不改变文件内容。
+    Regular GBK consoles are left unchanged; no COM is involved and file content is not modified.
     """
     if os.name != "nt":
         return
@@ -2052,13 +2052,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     try:
         return int(args.func(args))
     except WordHelperError as exc:
-        print(f"错误：{exc}", file=sys.stderr)
+        print(f"Error: {exc}", file=sys.stderr)
         return 2
     except KeyboardInterrupt:
-        print("已取消。", file=sys.stderr)
+        print("Cancelled.", file=sys.stderr)
         return 130
     except BrokenPipeError:
-        # 避免解释器退出时再次 flush 已关闭的管道而打印异常。
+        # Avoid flushing an already-closed pipe when the interpreter exits.
         try:
             null_fd = os.open(os.devnull, os.O_WRONLY)
             os.dup2(null_fd, sys.stdout.fileno())
@@ -2067,12 +2067,12 @@ def main(argv: Sequence[str] | None = None) -> int:
             pass
         return 0
     except PermissionError as exc:
-        print(f"错误：没有文件访问权限。{exc}", file=sys.stderr)
+        print(f"Error: permission denied. {exc}", file=sys.stderr)
         return 2
-    except Exception as exc:  # 保底，避免向普通用户抛冗长 traceback
+    except Exception as exc:  # Last resort: avoid showing a long traceback to regular users.
         if os.environ.get("WORD_HELPER_DEBUG"):
             raise
-        print(f"错误：{exc}", file=sys.stderr)
+        print(f"Error: {exc}", file=sys.stderr)
         return 1
 
 
