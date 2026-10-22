@@ -81,7 +81,7 @@
 
 直接复制下面这句话发给你的 Agent：
 
-“请先阅读 AGENT_GUIDE_WORD.md 了解规范。然后，使用 word_helper.py 将 examples/demo.md 转换为一个名为 demo_test.docx 的 Word 文档。转换成功后，请使用 read 命令验证一下内容，并向我汇报生成的文件路径。”
+“请先阅读 AGENT_GUIDE_WORD.md 了解规范。然后，使用 word_helper.py 将demo.md 转换为一个名为demo_test.docx 的 Word 文档。转换成功后，请使用 read 命令验证一下内容，并向我汇报生成的文件路径。”
 
 第三步：观察与验证
 
